@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script&display=swap" rel="stylesheet">
+    
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wordify</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+    <script>
+        // this counts how many owrds there is in the file the user uploads
+        function calculateWordCount(text) {
+            if (!text.trim()) {
+                return 0;
+            }
+            return text.trim().split(/\s+/).length;
+        }v
+
+        //in this part, when the user edits on the left column, the word count will update the amount of words is has LIVE
+        const textArea = document.getElementById('text-area');
+        const currentWordCountDisplay = document.getElementById('current-word-count');
+        const processedWordCountDisplay = document.getElementById('processed-word-count');
+
+        textArea.addEventListener('input', () => {
+            const currentText = textArea.value;
+            const currentWordCount = calculateWordCount(currentText);
+            currentWordCountDisplay.textContent = currentWordCount;
+        });
+
+        //This is a buttom for users to save their changes after they edit their text on the left column
+        document.getElementById('save-button').addEventListener('click', () => {
+            const text = textArea.value;
+            fetch('/save_text', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ text })
+            })
+                .then((response) => response.json())
+                .then((data) => {
+                    processedWordCountDisplay.textContent = data.updated_word_count;
+                    alert(data.message);
+                })
+                .catch((error) => console.error('Error saving text:', error));
+        });
+
+        // After the user uploads the file, they click the extend button to start the process of the code to make changes and extend their file of words
+        document.getElementById('extend-button').addEventListener('click', () => {
+            const text = textArea.value;
+            fetch('/extend', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ text })
+            })
+                .then((response) => response.text())
+                .then((html) => {
+                    document.body.innerHTML = html; 
+                })
+                .catch((error) => console.error('Error extending text:', error));
+        });
+
+        // This displays the name of the file on top of the left column so the user knows what file they've uploaded
+        function displayFileName() {
+            const fileInput = document.getElementById('myFile');
+            const fileNameDisplay = document.getElementById('fileNameDisplay');
+            const errorMessage = document.getElementById('error-message');
+            
+            if (fileInput.files.length > 0) {
+                fileNameDisplay.textContent = `Selected file: ${fileInput.files[0].name}`;
+                errorMessage.textContent = '';
+            } else {
+                fileNameDisplay.textContent = 'No file selected';
+                errorMessage.textContent = 'Please select a file before uploading.';
+            }
+        }
+
+        // This makes sure that there is a file chosen before the user clicks on the upload button
+        //other wise they will receive an error, a file is required to upload
+        function validateForm(event) {
+            const fileInput = document.getElementById('myFile');
+            const errorMessage = document.getElementById('error-message');
+            
+            if (fileInput.files.length === 0) {
+                event.preventDefault(); 
+                errorMessage.textContent = 'Please select a file before uploading.';
+            }
+        }
+
+        // When the user edits on the left column block, the text updates with the hchanges included
+        // the text will also show up on the processed text; the output
+        function updateText(event) {
+            const updatedText = event.target.value;
+
+            fetch('/update_text', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    text: updatedText
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('processedText').innerHTML = data.processed_text;
+                document.getElementById('updatedWordCount').innerHTML = `Updated Word Count: ${data.updated_word_count}`;
+            })
+            .catch(error => console.error('Error updating text:', error));
+        }
+        
+        // This function saves the updated text the user inputs in the left column box.
+        function saveUpdatedText() {
+            const editableText = document.getElementById('editableText').value;
+            fetch('/save_text', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ text: editableText }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message || 'Text saved successfully!');
+
+                document.getElementById('processedText').innerHTML = data.processed_text;
+                document.getElementById('updatedWordCount').innerHTML = `Updated Word Count: ${data.updated_word_count}`;
+            })
+            .catch(error => {
+                console.error('Error saving text:', error);
+                alert('Failed to save the text. Please try again.');
+            });
+        }
+
+        // when the user already extended the text and they want to edit it again;
+        // this allows the text to be updated on the right side 
+        function updateProcessedText() {
+            const editableText = document.getElementById('editableText').value;
+    
+            fetch('/update_text', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ text: editableText }), 
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('processedTextContainer').innerHTML = data.processed_text;
+                document.getElementById('updatedWordCount').textContent = data.updated_word_count;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }
+
+        document.getElementById('editableText').addEventListener('input', updateProcessedText);
+
+        // this is for the user to be able to download the updated text after it has been processed
+        function downloadUpdatedText() {
+            var updatedText = '{{ processed_text|tojson }}';
+            var blob = new Blob([updatedText], { type: 'text/plain;charset=utf-8' });
+
+            var link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'updated_text.txt';
+            link.click();
+        }
+
+    </script>
+</head>
+<body>
+
+    <!-- our pink navigator Bar to take us to different pages like "Home", "Account", "Wordify", and "Contact" -->
+    <div class="navbar">
+        <a href="{{ url_for('homepage') }}" class="navbar-item special">Home</a>
+        <a href="{{ url_for('account') }}" class="navbar-item special">Account</a>
+        <a href="{{ url_for('wordify') }}" class="navbar-item special">Wordify</a>
+        <a href="{{ url_for('contact') }}" class="navbar-item special">Contact</a>
+    </div>
+
+    <!-- this has the title and also includes a description on the website -->
+    <!-- this helps the users understand how to navigate and utilize the website -->
+    <br>
+    <br>
+    <br>
+    <h1>Wordify</h1>
+    <p>Wordify is designed to help you increase your word count, whether you're writing an essay, blog, or any other content. </p>
+    <p>Simply select the "Choose File" option below to upload your document (Wordify only supports .txt and .docx file formats).</p>
+    <p>After attaching your file, click on the "Upload" button, and once the upload is complete, you can download the extended file.</p>
+    <br>
+
+    <!-- this is the where the users start to choose a file and upload-->
+    <!-- It also displays the name of the file right when it has been chosen -->
+    <form action="/upload" method="POST" enctype="multipart/form-data" onsubmit="validateForm(event)">
+        <div class="file-upload-container">
+            <div class="file-display" id="fileNameDisplay">No file selected</div>
+            <label for="myFile" class="custom-button">Choose File</label>
+            <input type="file" id="myFile" name="user_file" accept=".txt, .docx" onchange="displayFileName()">
+        </div>
+        <input type="submit" value="Upload">
+        <div id="error-message" style="color: #a1606d; margin-top: 10px;"></div>
+    </form>
+
+    {% if text %}
+    <form action="/extend" method="POST">
+                <input type="submit" value="Extend" class="custom-button">
+    </form>
+    {% endif %}
+
+    <!-- this shows the boxes that the user will see the texts in-->
+    <div class="container">
+        <!-- Left Column box -->
+         <!--editable-->
+        <div class="left-column">
+            <h3>Current Word Count: {{ current_word_count }} | {{ filename }}</h3>
+
+            {% if text %}
+            <div class="text-container">
+                <div class="pink-box">
+                            <textarea id="editableText" rows="20" cols="50" name="editable_text" oninput="updateText(event)">{{ text }}</textarea>
+                        </div>
+                    </div>
+                    <br>
+                    <br>
+                    
+                    <div class="button-container">
+                        <button id="saveButton" onclick="saveUpdatedText()" class="custom-button">Save and extend the edited text!</button>
+                    </div>
+                    {% else %}
+                        <div class="text-container">
+                            <div class="pink-box"> Please upload file </div>
+                        </div>
+                    {% endif %}
+                </div>    
+        
+                <!-- Right Column Box with the output-->
+                <!-- Users can also download the processed file-->
+                <div class="right-column">
+                    <h3 id="updatedWordCount">Updated Word Count: {{ updated_word_count }}</h3>
+                    {% if text %}
+                        <div class="text-container">
+                            <div class="pink-box" id="processedText">
+                                <p>{{ processed_text|safe }}</p>
+                            </div>
+                        </div>
+                        {% if download_link %}
+                            <div class="download-container">
+                                <button class="custom-button" onclick="downloadUpdatedText()">Download the updated file</button>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="text-container">
+                            <div class="pink-box"> Please upload file </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        
+        </body>
+        </html>
+        
